@@ -18,10 +18,10 @@ from telethon.tl.functions.channels import (EditAdminRequest,
                                             EditBannedRequest,
                                             EditPhotoRequest)
 from telethon.tl.functions.messages import UpdatePinnedMessageRequest
-from telethon.tl.types import (PeerChannel, ChannelParticipantsAdmins,
-                               ChatAdminRights, ChatBannedRights,
-                               MessageEntityMentionName, MessageMediaPhoto,
-                               ChannelParticipantsBots)
+from telethon.tl.types import (PeerChat, PeerChannel,
+                               ChannelParticipantsAdmins, ChatAdminRights,
+                               ChatBannedRights, MessageEntityMentionName,
+                               MessageMediaPhoto, ChannelParticipantsBots)
 
 from userbot import BOTLOG, BOTLOG_CHATID, CMD_HELP, bot
 from userbot.events import register
@@ -406,7 +406,7 @@ async def unmoot(unmot):
                 f"CHAT: {unmot.chat.title}(`{unmot.chat_id}`)")
 
 
-@register(incoming=True, disable_edited=True)
+@register(incoming=True, disable_errors=True)
 async def muter(moot):
     """ Used for deleting the messages of muted people """
     try:
@@ -429,12 +429,21 @@ async def muter(moot):
     if muted:
         for i in muted:
             if str(i.sender) == str(moot.sender_id):
-                await moot.delete()
-                await moot.client(
-                    EditBannedRequest(moot.chat_id, moot.sender_id, rights))
+                try:
+                    await moot.delete()
+                    await moot.client(
+                        EditBannedRequest(moot.chat_id, moot.sender_id,
+                                          rights))
+                except (BadRequestError, UserAdminInvalidError,
+                        ChatAdminRequiredError, UserIdInvalidError):
+                    await moot.client.send_read_acknowledge(
+                        moot.chat_id, moot.id)
     for i in gmuted:
         if i.sender == str(moot.sender_id):
-            await moot.delete()
+            try:
+                await moot.delete()
+            except BadRequestError:
+                await moot.client.send_read_acknowledge(moot.chat_id, moot.id)
 
 
 @register(outgoing=True, pattern="^.ungmute(?: |$)(.*)", groups_only=True)
@@ -635,7 +644,7 @@ async def get_bots(show):
     title = info.title if info.title else "this chat"
     mentions = f'<b>Bots in {title}:</b>\n'
     try:
-        if isinstance(message.to_id, PeerChat):
+        if isinstance(show.to_id, PeerChat):
             await show.edit("`I heard that only Supergroups can have bots.`")
             return
         else:
